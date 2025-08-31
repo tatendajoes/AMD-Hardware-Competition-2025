@@ -1,0 +1,7 @@
+# Python dependencies for the web server
+Flask
+requests
+# Add other libraries like scikit-learn, joblib, numpy, etc. as needed
+# scikit-learn
+# joblib
+# numpy

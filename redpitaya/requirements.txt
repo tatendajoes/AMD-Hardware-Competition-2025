@@ -1,0 +1,3 @@
+# Python dependencies for the Red Pitaya code
+# Note: The 'rp' library is pre-installed on Red Pitaya
+requests
