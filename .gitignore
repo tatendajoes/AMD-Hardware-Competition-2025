@@ -85,3 +85,50 @@ dmypy.json
 
 # local settings
 local_settings.py
+
+# Project-specific files
+*.pkl
+*.model
+*.h5
+*.joblib
+!smart_rul_predictor.pkl  # Keep main trained model in repo
+
+# Data files
+data/
+datasets/
+*.csv
+*.txt
+!requirements.txt
+!README.txt
+!*.md
+
+# Log files
+*.log
+logs/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.bak
+
+# IDE and editor files
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# SSH keys and credentials
+*.pem
+*.key
+id_rsa*
+
+# Configuration with sensitive data
+config_local.py
+secrets.json
+.env
+!.env.example

@@ -1,3 +1,11 @@
-# Python dependencies for the Red Pitaya code
-# Note: The 'rp' library is pre-installed on Red Pitaya
-requests
+# RedPitaya sensor acquisition dependencies
+# Note: 'rp' library is pre-installed on RedPitaya hardware
+
+# HTTP requests for data posting
+requests>=2.31.0
+
+# Numerical computing  
+numpy>=1.24.0
+
+# For sensor simulation and data processing
+scipy>=1.10.0

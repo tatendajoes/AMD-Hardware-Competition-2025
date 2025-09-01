@@ -13,14 +13,17 @@ def show_usage():
     print("=== RedPitaya Sensor Data Acquisition ===")
     print()
     print("Usage:")
-    print("  python3 run_acquisition.py sensors                    # Real sensors, no posting")
-    print("  python3 run_acquisition.py simulation                 # Simulated data, no posting")
-    print("  python3 run_acquisition.py sensors --post             # Real sensors + post data")
-    print("  python3 run_acquisition.py simulation --post          # Simulated data + post data")
+    print("  python3 run_acquisition.py sensors                    # Real sensors, display only")
+    print("  python3 run_acquisition.py simulation                 # Simulated data, display only")
+    print("  python3 run_acquisition.py sensors --post             # Real sensors + post individual samples")
+    print("  python3 run_acquisition.py simulation --post          # Simulated data + post individual samples")
+    print("  python3 run_acquisition.py simulation --post --batch  # Simulated data + post batches (recommended)")
     print("  python3 run_acquisition.py                            # Interactive mode")
     print()
     print("Options:")
     print("  --post                    Enable data posting to web server")
+    print("  --batch                   Use batch mode (collect multiple samples before posting)")
+    print("  --batch-size N            Number of samples per batch (default: 100)")
     print("  --server-ip IP            Web server IP (default from config)")
     print("  --server-port PORT        Web server port (default from config)")
     print()
@@ -45,7 +48,7 @@ def interactive_mode():
             mode = 'simulation'
             break
         elif choice in ['q', 'quit', 'exit']:
-            return None, False
+            return None, False, False
         else:
             print("Invalid choice. Please enter 1, 2, or q.")
     
@@ -53,12 +56,18 @@ def interactive_mode():
     post_choice = input("Enable data posting to web server? (y/n): ").strip().lower()
     post_data = post_choice.startswith('y')
     
-    return mode, post_data
+    use_batch = False
+    if post_data:
+        batch_choice = input("Use batch mode (recommended for ML features)? (y/n): ").strip().lower()
+        use_batch = batch_choice.startswith('y')
+    
+    return mode, post_data, use_batch
 
 def main():
     # Parse arguments
     mode = None
     post_data = False
+    use_batch = False
     extra_args = []
     
     # Check command line arguments
@@ -70,7 +79,7 @@ def main():
         if result is None:
             print("Goodbye!")
             return
-        mode, post_data = result
+        mode, post_data, use_batch = result
     else:
         # Parse command line
         i = 0
@@ -83,6 +92,11 @@ def main():
                 mode = 'simulation'
             elif arg in ['--post', '--post-data']:
                 post_data = True
+            elif arg in ['--batch', '--batch-mode']:
+                use_batch = True
+            elif arg in ['--batch-size'] and i + 1 < len(args):
+                extra_args.extend(['--batch-size', args[i + 1]])
+                i += 1
             elif arg in ['--server-ip'] and i + 1 < len(args):
                 extra_args.extend(['--server-ip', args[i + 1]])
                 i += 1
@@ -106,6 +120,8 @@ def main():
     print(f"\nStarting data acquisition:")
     print(f"  Mode: {mode}")
     print(f"  Data posting: {'ENABLED' if post_data else 'DISABLED'}")
+    if post_data:
+        print(f"  Format: {'Batch data' if use_batch else 'Individual samples'}")
     print("Press Ctrl+C to stop.\n")
     
     # Import and run the main acquisition script
@@ -114,6 +130,11 @@ def main():
         cmd_args = ['data_acquisition.py', '--mode', mode]
         if post_data:
             cmd_args.append('--post-data')
+            if use_batch:
+                # Enable batch mode by NOT using --individual-samples flag
+                pass  # Default behavior is now batch mode
+            else:
+                cmd_args.append('--individual-samples')
         cmd_args.extend(extra_args)
         
         # Modify sys.argv to pass the arguments

@@ -7,7 +7,7 @@ RED_PITAYA_IP = 'rp-f0d25d.local'  # IMPORTANT: Change this to your Red Pitaya's
 SAMPLING_INTERVAL = 1  # Time in seconds between each data sample
 
 # Web Server Configuration
-WEBSERVER_IP = '192.168.1.50'  # IMPORTANT: Change this to the IP address of the computer running the webserver
+WEBSERVER_IP = '192.168.1.103'  # IMPORTANT: Change this to the IP address of the computer running the webserver
 WEBSERVER_PORT = 5000
 
 # Sensor Pin Configuration (matches the hardware setup)

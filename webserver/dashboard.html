@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RedPitaya RUL Prediction Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .status-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .status-card h3 {
+            margin: 0 0 15px 0;
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .rul-display {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        .health-status {
+            font-size: 1.3em;
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        .sensor-data {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .sensor-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #4fc3f7;
+        }
+        
+        .label {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+        
+        .logs {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #4fc3f7;
+            padding-left: 10px;
+        }
+        
+        .refresh-btn {
+            background: #4fc3f7;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .refresh-btn:hover {
+            background: #29b6f6;
+            transform: translateY(-2px);
+        }
+        
+        .timestamp {
+            text-align: center;
+            opacity: 0.7;
+            margin-top: 20px;
+        }
+        
+        .loading {
+            text-align: center;
+            font-style: italic;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 RedPitaya RUL Prediction Dashboard</h1>
+            <p>Real-time Remaining Useful Life Monitoring</p>
+        </div>
+        
+        <div class="status-grid">
+            <div class="status-card">
+                <h3>🔮 Remaining Useful Life</h3>
+                <div class="rul-display" id="rulDisplay">--</div>
+                <div class="health-status" id="healthStatus">Waiting for data...</div>
+            </div>
+            
+            <div class="status-card">
+                <h3>📊 Current Sensor Readings</h3>
+                <div class="sensor-data">
+                    <div class="sensor-item">
+                        <div class="value" id="vibLevel">--</div>
+                        <div class="label">Vibration (V)</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="accelRMS">--</div>
+                        <div class="label">Accel RMS (g)</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="sampleCount">--</div>
+                        <div class="label">Samples</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dataMode">--</div>
+                        <div class="label">Mode</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status-card">
+            <h3>📋 Recent Predictions Log</h3>
+            <div style="text-align: center; margin-bottom: 10px;">
+                <button class="refresh-btn" onclick="fetchLatestData()">🔄 Refresh Data</button>
+                <button class="refresh-btn" onclick="toggleAutoRefresh()">⏱️ Auto Refresh: <span id="autoStatus">OFF</span></button>
+            </div>
+            <div class="logs" id="logsContainer">
+                <div class="loading">Click "Refresh Data" to fetch latest predictions...</div>
+            </div>
+        </div>
+        
+        <div class="timestamp" id="lastUpdate">
+            Last updated: Never
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval = null;
+        let isAutoRefresh = false;
+        let predictions = [];
+        
+        function formatTimestamp(date) {
+            return date.toLocaleString();
+        }
+        
+        function addLogEntry(message, timestamp = new Date()) {
+            const logsContainer = document.getElementById('logsContainer');
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `[${formatTimestamp(timestamp)}] ${message}`;
+            
+            logsContainer.insertBefore(logEntry, logsContainer.firstChild);
+            
+            // Keep only last 20 entries
+            while (logsContainer.children.length > 20) {
+                logsContainer.removeChild(logsContainer.lastChild);
+            }
+        }
+        
+        function updateStatus(data) {
+            if (data.status === 'waiting') {
+                document.getElementById('rulDisplay').textContent = '--';
+                document.getElementById('healthStatus').textContent = 'No data yet';
+                addLogEntry('⏳ Waiting for sensor data from RedPitaya...');
+                return;
+            }
+            
+            if (data.rul_prediction) {
+                document.getElementById('rulDisplay').textContent = data.rul_prediction.formatted;
+                
+                // Update health status with color
+                const hours = data.rul_prediction.value || 0;
+                let healthText = '';
+                if (hours > 24 * 30) healthText = '🟢 EXCELLENT';
+                else if (hours > 24 * 7) healthText = '🟡 GOOD';
+                else if (hours > 24) healthText = '🟠 MODERATE';
+                else if (hours > 12) healthText = '🔴 POOR';
+                else healthText = '⚫ CRITICAL';
+                
+                document.getElementById('healthStatus').textContent = healthText;
+                
+                addLogEntry(`RUL Prediction: ${data.rul_prediction.formatted} (${hours.toFixed(1)}h) - ${healthText}`);
+            }
+            
+            if (data.feature_extraction) {
+                const vibFeatures = data.feature_extraction.vibration_features;
+                const accelFeatures = data.feature_extraction.accel_magnitude_features;
+                
+                if (vibFeatures && vibFeatures.length > 0) {
+                    document.getElementById('vibLevel').textContent = vibFeatures[2].toFixed(3); // Mean
+                }
+                
+                if (accelFeatures && accelFeatures.length > 0) {
+                    document.getElementById('accelRMS').textContent = accelFeatures[0].toFixed(3); // RMS
+                }
+            }
+            
+            document.getElementById('sampleCount').textContent = data.sample_count || '--';
+            document.getElementById('dataMode').textContent = data.mode || '--';
+            document.getElementById('lastUpdate').textContent = `Last updated: ${formatTimestamp(new Date())}`;
+        }
+        
+        function fetchLatestData() {
+            addLogEntry('Fetching latest data from server...');
+            
+            fetch('/latest', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'waiting') {
+                    addLogEntry('⏳ No predictions available yet. Run sensor acquisition from RedPitaya.');
+                } else {
+                    updateStatus(data);
+                }
+            })
+            .catch(error => {
+                addLogEntry(`❌ Error fetching data: ${error.message}`);
+            });
+        }
+        
+        function toggleAutoRefresh() {
+            const autoStatus = document.getElementById('autoStatus');
+            
+            if (isAutoRefresh) {
+                clearInterval(autoRefreshInterval);
+                autoStatus.textContent = 'OFF';
+                isAutoRefresh = false;
+                addLogEntry('Auto-refresh disabled');
+            } else {
+                autoRefreshInterval = setInterval(fetchLatestData, 5000); // Every 5 seconds
+                autoStatus.textContent = 'ON';
+                isAutoRefresh = true;
+                addLogEntry('Auto-refresh enabled (5s interval)');
+                fetchLatestData(); // Fetch immediately
+            }
+        }
+        
+        // Initialize
+        addLogEntry('Dashboard initialized. Ready to receive predictions.');
+    </script>
+</body>
+</html>

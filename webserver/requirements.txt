@@ -1,7 +1,16 @@
-# Python dependencies for the web server
-Flask
-requests
-# Add other libraries like scikit-learn, joblib, numpy, etc. as needed
-# scikit-learn
-# joblib
-# numpy
+# Web server and ML prediction dependencies
+
+# Web framework
+Flask>=2.3.0
+
+# HTTP requests
+requests>=2.31.0
+
+# Machine learning
+scikit-learn>=1.3.0
+joblib>=1.3.0
+
+# Numerical computing
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0

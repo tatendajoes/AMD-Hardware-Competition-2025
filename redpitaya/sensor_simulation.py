@@ -7,60 +7,64 @@ import random
 
 class RULSensorSimulator:
     """
-    Simulates sensor data for Remaining Useful Life (RUL) prediction
-    Shows progressive machine degradation over 3 minutes (180 seconds)
+    Sensor data simulator for RUL prediction testing.
+    Simulates progressive equipment degradation over 6 months.
+    180 samples represent 6 months of operation (1 sample per day).
     """
     
     def __init__(self, duration=180, sampling_rate=1.0):
         """
-        Initialize the RUL simulator
-        :param duration: Total simulation time in seconds (default: 3 minutes)
-        :param sampling_rate: Samples per second (default: 1 Hz)
+        Initialize simulator.
+        duration: Total simulation samples (180 = 6 months)
+        sampling_rate: Collection rate in Hz for real-time mode
         """
         self.duration = duration
         self.sampling_rate = sampling_rate
         self.total_samples = int(duration * sampling_rate)
         self.current_sample = 0
         
-        # Define degradation phases
-        self.phase_1_end = int(0.33 * self.total_samples)  # 0-60s: Healthy
-        self.phase_2_end = int(0.67 * self.total_samples)  # 60-120s: Degrading
-        # phase_3: 120-180s: Critical
+        # Equipment degradation phases over 6 months
+        self.phase_1_end = int(0.40 * self.total_samples)  # 0-2.4 months: Normal operation
+        self.phase_2_end = int(0.70 * self.total_samples)  # 2.4-4.2 months: Early wear
+        self.phase_3_end = int(0.90 * self.total_samples)  # 4.2-5.4 months: Degradation
+        # Final phase: 5.4-6 months: Critical condition
         
     def get_degradation_factor(self):
-        """Calculate current degradation factor (0=healthy, 1=critical)"""
+        """Calculate degradation factor (0=new, 1=failed)"""
         progress = self.current_sample / self.total_samples
         
-        if progress <= 0.33:  # Phase 1: Healthy (0-33%)
-            return progress * 0.1  # Very slow degradation
-        elif progress <= 0.67:  # Phase 2: Degrading (33-67%)
-            return 0.1 + (progress - 0.33) * 1.5  # Moderate degradation
-        else:  # Phase 3: Critical (67-100%)
-            return 0.6 + (progress - 0.67) * 1.2  # Rapid degradation
+        if progress <= 0.40:  # Normal operation (0-2.4 months)
+            return progress * 0.05  # Minimal wear: 0% → 2%
+        elif progress <= 0.70:  # Early wear (2.4-4.2 months)
+            return 0.02 + (progress - 0.40) * 0.60  # Gradual: 2% → 20%
+        elif progress <= 0.90:  # Clear degradation (4.2-5.4 months)
+            return 0.20 + (progress - 0.70) * 2.0  # Noticeable: 20% → 60%
+        else:  # Critical condition (5.4-6 months)
+            return 0.60 + (progress - 0.90) * 4.0  # Rapid: 60% → 100%
     
     def simulate_accelerometer(self):
         """
-        Simulate ADXL335 accelerometer data with degradation
-        Returns: (x_g, y_g, z_g) in g-forces
+        Generate ADXL335 accelerometer data with equipment degradation.
+        Returns: (x_g, y_g, z_g) acceleration values in g-forces
         """
         degradation = self.get_degradation_factor()
         
-        # Base values (machine at rest, Z-axis shows gravity)
+        # Base acceleration (equipment at rest, gravity on Z-axis)
         base_x = 0.0
         base_y = 0.0
-        base_z = 1.0  # Gravity
+        base_z = 1.0  # 1g gravity
         
-        # Vibration amplitude increases with degradation
+        # Vibration increases with wear
         vibration_amplitude = 0.05 + degradation * 0.4  # 0.05g to 0.45g
         
-        # Add some machine operation frequencies
+        # Machine operating frequencies
         time_factor = self.current_sample / self.sampling_rate
         
-        # Primary machine frequency (gets more chaotic with degradation)
+        # Main vibration frequency (becomes irregular with wear)
         primary_freq = 2.0 + degradation * 3.0  # 2Hz to 5Hz
         primary_vibration = vibration_amplitude * math.sin(2 * math.pi * primary_freq * time_factor)
         
-        # Secondary harmonics (bearing issues)
+        # Harmonic content (bearing/gear issues in worn equipment)
         if degradation > 0.3:
             harmonic_freq = primary_freq * 2.5
             harmonic_amplitude = degradation * 0.2
@@ -89,36 +93,45 @@ class RULSensorSimulator:
     
     def simulate_vibration_sensor(self):
         """
-        Simulate vibration sensor voltage with degradation
+        Generate vibration sensor voltage with equipment degradation.
         Returns: (voltage, level_description)
         """
         degradation = self.get_degradation_factor()
         
-        # Base voltage levels
-        base_voltage = 0.2  # Quiet baseline
+        # Base voltage levels for 6-month equipment lifecycle
+        base_voltage = 0.1  # Quiet baseline for new equipment
         
-        # Vibration increases with degradation
-        vibration_voltage = degradation * 2.0  # 0V to 2.0V additional
+        # Voltage progression over equipment lifetime
+        progress = self.current_sample / self.total_samples
         
-        # Add machine operation patterns
+        if progress <= 0.40:  # Normal operation
+            vibration_voltage = degradation * 0.5  # 0V to 0.25V
+        elif progress <= 0.70:  # Early wear
+            vibration_voltage = 0.2 + (degradation - 0.02) * 1.5  # 0.2V to 0.7V
+        elif progress <= 0.90:  # Clear degradation
+            vibration_voltage = 0.7 + (degradation - 0.20) * 2.0  # 0.7V to 1.4V
+        else:  # Critical condition
+            vibration_voltage = 1.4 + (degradation - 0.60) * 2.25  # 1.4V to 2.3V
+        
+        # Machine operating patterns
         time_factor = self.current_sample / self.sampling_rate
         
-        # Main vibration frequency
-        main_freq = 1.5 + degradation * 2.5  # 1.5Hz to 4Hz
-        main_vibration = vibration_voltage * 0.5 * (1 + math.sin(2 * math.pi * main_freq * time_factor))
+        # Main vibration frequency (increases with wear)
+        main_freq = 1.0 + degradation * 1.5  # 1.0Hz to 2.5Hz
+        main_vibration = vibration_voltage * 0.3 * (1 + math.sin(2 * math.pi * main_freq * time_factor))
         
-        # High frequency content (bearing/gear mesh issues)
-        if degradation > 0.4:
-            hf_freq = main_freq * 10
-            hf_amplitude = degradation * 0.3
+        # High frequency noise (bearing/gear issues in worn equipment)
+        if degradation > 0.20:  # Appears after 20% degradation
+            hf_freq = main_freq * 8
+            hf_amplitude = (degradation - 0.20) * 0.25
             hf_vibration = hf_amplitude * abs(math.sin(2 * math.pi * hf_freq * time_factor))
         else:
             hf_vibration = 0
         
-        # Random noise
+        # Background noise
         noise = random.gauss(0, 0.05 + degradation * 0.1)
         
-        # Occasional shock events
+        # Occasional impact events
         shock_probability = degradation * 0.03
         shock_spike = 0
         if random.random() < shock_probability:
@@ -145,12 +158,18 @@ class RULSensorSimulator:
         progress = self.current_sample / self.total_samples
         degradation = self.get_degradation_factor()
         
-        if progress <= 0.33:
-            phase = "Healthy Operation"
-        elif progress <= 0.67:
-            phase = "Gradual Degradation"
-        else:
-            phase = "Critical Condition"
+        # Updated phase descriptions for 6-month timeline
+        if progress <= 0.40:  # 0-2.4 months
+            if progress <= 0.10:  # First month
+                phase = "New Equipment"
+            else:
+                phase = "Healthy Operation"
+        elif progress <= 0.70:  # 2.4-4.2 months
+            phase = "Early Degradation"
+        elif progress <= 0.90:  # 4.2-5.4 months
+            phase = "Advanced Degradation"
+        else:  # 5.4-6 months
+            phase = "Critical - Maintenance Required"
             
         return {
             "phase": phase,

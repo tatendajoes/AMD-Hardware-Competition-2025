@@ -14,7 +14,7 @@ from sensor_simulation import RULSensorSimulator
 import config
 
 def setup_real_sensors():
-    """Initialize real hardware sensors"""
+    """Initialize hardware sensors"""
     try:
         import rp
         rp.rp_Init()
@@ -29,10 +29,10 @@ def setup_real_sensors():
         return None, None, None
 
 def setup_simulation_sensors():
-    """Initialize simulated sensors"""
+    """Initialize simulation sensors"""
     print("Initializing sensor simulation...")
     
-    # Create simulator for 3 minutes
+    # Create simulator for 6-month equipment lifecycle
     simulator = RULSensorSimulator(duration=180, sampling_rate=1/config.SAMPLING_INTERVAL)
     
     # Create simulated sensor objects
@@ -40,13 +40,14 @@ def setup_simulation_sensors():
     vibe_sensor = SimulatedVibrationSensor(simulator)
     
     print("Sensor simulation initialized successfully!")
-    print(f"Simulation will run for {simulator.duration} seconds ({simulator.total_samples} samples)")
+    print(f"Simulation represents 6 months of equipment operation ({simulator.total_samples} samples)")
+    print("Timeline: Each sample represents 1 day of operation")
     
     return accel, vibe_sensor, simulator
 
 def main():
     """
-    Main function to acquire data from sensors (real or simulated).
+    Data acquisition from sensors (hardware or simulated).
     """
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='RedPitaya Sensor Data Acquisition')
@@ -58,6 +59,10 @@ def main():
                        help=f'Web server IP address (default: {config.WEBSERVER_IP})')
     parser.add_argument('--server-port', type=int, default=config.WEBSERVER_PORT,
                        help=f'Web server port (default: {config.WEBSERVER_PORT})')
+    parser.add_argument('--batch-size', type=int, default=100,
+                       help='Number of samples to collect before posting (default: 100)')
+    parser.add_argument('--individual-samples', action='store_true',
+                       help='Send individual samples instead of batches (original behavior)')
     args = parser.parse_args()
     
     print(f"=== RedPitaya Data Acquisition ===")
@@ -65,6 +70,10 @@ def main():
     print(f"Sampling interval: {config.SAMPLING_INTERVAL} seconds")
     if args.post_data:
         print(f"Posting data to: http://{args.server_ip}:{args.server_port}/data")
+        if args.individual_samples:
+            print("Data format: Individual samples")
+        else:
+            print(f"Data format: Batches of {args.batch_size} samples")
     else:
         print("Data posting: DISABLED (use --post-data to enable)")
     print("=" * 40)
@@ -97,6 +106,15 @@ def main():
             print("Data will be displayed only.")
             args.post_data = False
     
+    # Initialize batch collection buffers
+    if args.post_data and not args.individual_samples:
+        accel_x_batch = []
+        accel_y_batch = []
+        accel_z_batch = []
+        vib_voltage_batch = []
+        batch_timestamps = []
+        print(f"Batch mode: Collecting {args.batch_size} samples before posting...")
+    
     try:
         print("Starting data acquisition...")
         sample_count = 0
@@ -110,6 +128,10 @@ def main():
                 
                 if sim_data is None:
                     print("Simulation completed!")
+                    # Post any remaining batch data
+                    if args.post_data and not args.individual_samples and len(accel_x_batch) > 0:
+                        post_batch_data(accel_x_batch, accel_y_batch, accel_z_batch, 
+                                      vib_voltage_batch, batch_timestamps, post_data, args.mode)
                     break
                 
                 # Update simulated sensors with new data
@@ -131,23 +153,6 @@ def main():
                 vibration_level = vibe_sensor.get_vibration_level()
                 simulation_info = None
 
-            # Prepare data payload (IDENTICAL format for both modes)
-            sensor_data = {
-                "timestamp": time.time(),
-                "accelerometer": {
-                    "x": round(x_g, 3),
-                    "y": round(y_g, 3),
-                    "z": round(z_g, 3)
-                },
-                "vibration": {
-                    "voltage": round(vibration_voltage, 3),
-                    "level": vibration_level
-                }
-            }
-            
-            # NOTE: This is the EXACT same format as the original data_acquisition.py
-            # Whether data comes from real sensors or simulation, the posted data is identical
-
             # Display data (same format for both modes)
             status_msg = f"[{sample_count+1:3d}] Accel: ({x_g:+.2f},{y_g:+.2f},{z_g:+.2f})g | " \
                         f"Vib: {vibration_voltage:.2f}V ({vibration_level})"
@@ -158,13 +163,53 @@ def main():
                 progress = simulation_info["progress_percent"]
                 status_msg += f" | {phase} ({progress:4.1f}%)"
             
-            # Post data if enabled
+            # Handle data posting
             if args.post_data:
-                try:
-                    post_data(sensor_data)
-                    print(f"{status_msg} | ✓ Posted")
-                except Exception as e:
-                    print(f"{status_msg} | ✗ Post failed: {e}")
+                if args.individual_samples:
+                    # Original behavior: post individual samples
+                    sensor_data = {
+                        "timestamp": time.time(),
+                        "accelerometer": {
+                            "x": round(x_g, 3),
+                            "y": round(y_g, 3),
+                            "z": round(z_g, 3)
+                        },
+                        "vibration": {
+                            "voltage": round(vibration_voltage, 3),
+                            "level": vibration_level
+                        }
+                    }
+                    
+                    try:
+                        post_data(sensor_data)
+                        print(f"{status_msg} | ✓ Posted")
+                    except Exception as e:
+                        print(f"{status_msg} | ✗ Post failed: {e}")
+                else:
+                    # Batch mode: collect samples
+                    accel_x_batch.append(x_g)
+                    accel_y_batch.append(y_g)
+                    accel_z_batch.append(z_g)
+                    vib_voltage_batch.append(vibration_voltage)
+                    batch_timestamps.append(time.time())
+                    
+                    # Check if batch is ready
+                    if len(accel_x_batch) >= args.batch_size:
+                        try:
+                            post_batch_data(accel_x_batch, accel_y_batch, accel_z_batch, 
+                                          vib_voltage_batch, batch_timestamps, post_data, args.mode)
+                            print(f"{status_msg} | ✓ Batch posted ({len(accel_x_batch)} samples)")
+                            
+                            # Clear buffers
+                            accel_x_batch.clear()
+                            accel_y_batch.clear() 
+                            accel_z_batch.clear()
+                            vib_voltage_batch.clear()
+                            batch_timestamps.clear()
+                        except Exception as e:
+                            print(f"{status_msg} | ✗ Batch post failed: {e}")
+                    else:
+                        print(f"{status_msg} | Batch: {len(accel_x_batch)}/{args.batch_size}")
             else:
                 print(status_msg)
             
@@ -178,6 +223,14 @@ def main():
 
     except KeyboardInterrupt:
         print("\nData acquisition stopped by user.")
+        # Post any remaining batch data
+        if args.post_data and not args.individual_samples and len(accel_x_batch) > 0:
+            try:
+                post_batch_data(accel_x_batch, accel_y_batch, accel_z_batch, 
+                              vib_voltage_batch, batch_timestamps, post_data, args.mode)
+                print(f"Posted final batch ({len(accel_x_batch)} samples)")
+            except Exception as e:
+                print(f"Failed to post final batch: {e}")
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:
@@ -188,6 +241,27 @@ def main():
                 print("Red Pitaya resources released.")
             except:
                 pass
+
+def post_batch_data(accel_x, accel_y, accel_z, vib_voltage, timestamps, post_func, mode):
+    """Post batch data to web server"""
+    batch_data = {
+        "mode": mode,
+        "batch_info": {
+            "sample_count": len(accel_x),
+            "start_time": timestamps[0],
+            "end_time": timestamps[-1],
+            "duration": timestamps[-1] - timestamps[0]
+        },
+        "accel_data": {
+            "x": accel_x,
+            "y": accel_y, 
+            "z": accel_z
+        },
+        "vib_data": vib_voltage,
+        "timestamps": timestamps
+    }
+    
+    post_func(batch_data)
 
 if __name__ == "__main__":
     main()
